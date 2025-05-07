@@ -33,7 +33,7 @@ def download_video(link):
         filename = f"input_video_{video_hash}.mp4"
         subprocess.run([
             "yt-dlp",
-            "--cookies-from-browser", "chrome",
+            "--cookies", "cookies.txt",
             "-o", filename,
             link
         ], check=True)
