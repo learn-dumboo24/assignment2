@@ -31,7 +31,12 @@ def download_video(link):
     try:
         video_hash = hashlib.md5(link.encode()).hexdigest()[:8]
         filename = f"input_video_{video_hash}.mp4"
-        subprocess.run(["yt-dlp", "-o", filename, link], check=True)
+        subprocess.run([
+            "yt-dlp",
+            "--cookies-from-browser", "chrome",
+            "-o", filename,
+            link
+        ], check=True)
         return filename
     except Exception as e:
         st.error(f"Download failed: {e}")
