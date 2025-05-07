@@ -13,8 +13,10 @@ import moviepy as mp
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-if 'reel_id' not in st.session_state:
-    st.session_state.reel_id = None 
+def initialize_session_state():
+    if 'reel_id' not in st.session_state:
+        st.session_state.reel_id = None
+initialize_session_state()
 
 st.markdown("<br><br><br>", unsafe_allow_html=True)
 col1, spacer, col2 = st.columns([2, 2, 3])
