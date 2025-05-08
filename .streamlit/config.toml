@@ -2,6 +2,7 @@
 headless = true
 runOnSave = false
 showErrorDetails = true
+watchFileSystem = false
 
 [global]
 developmentMode = false
