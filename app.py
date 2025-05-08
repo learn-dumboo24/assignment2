@@ -1,6 +1,7 @@
 import os
 os.environ["STREAMLIT_WATCH_USE_POLLING"] = "false"
 os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
+import uuid
 import streamlit as st
 import subprocess
 import ssl
@@ -10,13 +11,14 @@ import cv2
 from faster_whisper import WhisperModel
 from transformers import pipeline
 import tempfile
-import moviepy as mp
+import moviepy.editor as mp
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
 def initialize_session_state():
     if 'reel_id' not in st.session_state:
         st.session_state.reel_id = None
+
 initialize_session_state()
 
 def clear_previous_files(video_filename=None, audio_filename=None):
@@ -102,19 +104,30 @@ with col1:
     st.title("Paste your link here 🔗")
     video_link = st.text_input("Paste a YouTube or Instagram video link")
     if st.button("Process Link", key="process_link_button"):
+        unique_video_filename = f"input_video_{uuid.uuid4().hex}.mp4"
+        clear_previous_files(video_filename=unique_video_filename, audio_filename="audio.wav")
         video_file = download_video(video_link)
         if video_file:
-            process_video(video_file)
-            st.video(video_file)
-            clear_previous_files(video_filename=video_file)
+            os.rename(video_file, unique_video_filename)
+            try:
+                process_video(unique_video_filename)
+            finally:
+                clear_previous_files(video_filename=unique_video_filename)
+
+            st.video(unique_video_filename)
+            clear_previous_files(video_filename=unique_video_filename)
 
 with col2:
     st.title("Upload video here 📁")
     uploaded_file = st.file_uploader("Upload a short video", type=["mp4", "mov", "avi", "mkv"])
     if uploaded_file is not None:
-        st.video(uploaded_file)
-        with open("uploaded_video.mp4", "wb") as f:
+        unique_uploaded_filename = f"uploaded_video_{uuid.uuid4().hex}.mp4"
+        clear_previous_files(video_filename=unique_uploaded_filename, audio_filename="audio.wav")
+        with open(unique_uploaded_filename, "wb") as f:
             f.write(uploaded_file.read())
+        st.video(unique_uploaded_filename)
         if st.button("Process Uploaded Video", key="process_uploaded_video_button"):
-            process_video("uploaded_video.mp4")
-            clear_previous_files(video_filename="uploaded_video.mp4")
+            try:
+                process_video(unique_uploaded_filename)
+            finally:
+                clear_previous_files(video_filename=unique_uploaded_filename)
