@@ -5,6 +5,3 @@ showErrorDetails = true
 
 [global]
 developmentMode = false
-
-[watcher]
-watchFileChanges = false
