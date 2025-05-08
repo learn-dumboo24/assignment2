@@ -11,7 +11,7 @@ import cv2
 from faster_whisper import WhisperModel
 from transformers import pipeline
 import tempfile
-import moviepy.editor as mp
+import moviepy as mp
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
