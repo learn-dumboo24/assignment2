@@ -1,5 +1,6 @@
 import os
-os.environ["STREAMLIT_WATCH_USE_POLLING"] = "true"
+os.environ["STREAMLIT_WATCH_USE_POLLING"] = "false"
+os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
 import streamlit as st
 import subprocess
 import ssl
@@ -46,7 +47,7 @@ def transcribe_audio(path):
     try:
         clip = mp.VideoFileClip(path)
         clip.audio.write_audiofile("audio.wav")
-        model = WhisperModel("tiny", compute_type="int8")  
+        model = WhisperModel("small", compute_type="int8")
         segments, _ = model.transcribe("audio.wav")
         text = " ".join([segment.text for segment in segments])
         return text
@@ -58,7 +59,6 @@ def extract_text_from_frames(path):
     cap = cv2.VideoCapture(path)
     texts = []
     frame_count = 0
-
     while True:
         ret, frame = cap.read()
         if not ret or frame_count > 300: 
