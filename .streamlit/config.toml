@@ -1,3 +1,10 @@
 [server]
+headless = true
 runOnSave = false
 showErrorDetails = true
+
+[global]
+developmentMode = false
+
+[watcher]
+watchFileChanges = false
