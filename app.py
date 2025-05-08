@@ -12,6 +12,7 @@ from faster_whisper import WhisperModel
 from transformers import pipeline
 import tempfile
 import moviepy as mp
+from io import BytesIO
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -111,11 +112,10 @@ with col1:
             os.rename(video_file, unique_video_filename)
             try:
                 process_video(unique_video_filename)
+                with open(unique_video_filename, "rb") as f:
+                    st.video(f.read())  
             finally:
                 clear_previous_files(video_filename=unique_video_filename)
-
-            st.video(unique_video_filename)
-            clear_previous_files(video_filename=unique_video_filename)
 
 with col2:
     st.title("Upload video here 📁")
@@ -125,7 +125,7 @@ with col2:
         clear_previous_files(video_filename=unique_uploaded_filename, audio_filename="audio.wav")
         with open(unique_uploaded_filename, "wb") as f:
             f.write(uploaded_file.read())
-        st.video(unique_uploaded_filename)
+        st.video(uploaded_file)  
         if st.button("Process Uploaded Video", key="process_uploaded_video_button"):
             try:
                 process_video(unique_uploaded_filename)
