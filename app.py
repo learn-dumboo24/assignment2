@@ -1,89 +1,91 @@
 import os
-os.environ["STREAMLIT_WATCH_USE_POLLING"] = "false"
-os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
-import uuid
 import streamlit as st
 import subprocess
-import ssl
-import hashlib
 import pytesseract
 import cv2
 from faster_whisper import WhisperModel
 from transformers import pipeline
 import tempfile
-import moviepy as mp
-from io import BytesIO
+import textwrap
 
-ssl._create_default_https_context = ssl._create_unverified_context
+MAX_VIDEO_BYTES = 1024 ** 3
+MAX_PREVIEW_BYTES = 50 * 1024 ** 2
 
-def initialize_session_state():
-    if 'reel_id' not in st.session_state:
-        st.session_state.reel_id = None
+@st.cache_resource
+def load_whisper():
+    return WhisperModel("small", compute_type="int8")
 
-initialize_session_state()
-
-def clear_previous_files(video_filename=None, audio_filename=None):
-    if video_filename and os.path.exists(video_filename):
-        os.remove(video_filename)
-    if audio_filename and os.path.exists(audio_filename):
-        os.remove(audio_filename)
+@st.cache_resource
+def load_summarizer():
+    return pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 
 st.markdown("<br><br><br>", unsafe_allow_html=True)
 col1, spacer, col2 = st.columns([2, 2, 3])
 
-def download_video(link):
-    try:
-        video_hash = hashlib.md5(link.encode()).hexdigest()[:8]
-        filename = f"input_video_{video_hash}.mp4"
-        subprocess.run([
-            "yt-dlp",
-            "--cookies", "cookies.txt",
-            "-o", filename,
-            link
-        ], check=True)
-        return filename
-    except Exception as e:
-        st.error(f"Download failed: {e}")
+def download_video(link, folder):
+    command = [
+        "yt-dlp",
+        "--no-playlist",
+        "--max-filesize", str(MAX_VIDEO_BYTES),
+        "--js-runtimes", "node",
+        "-f", "bv*[height<=480]+ba/b[height<=480]/b",
+        "-o", os.path.join(folder, "video.%(ext)s"),
+    ]
+    # COOKIES is a root-level Streamlit secret, which Streamlit also exposes as an env var
+    cookies = os.environ.get("COOKIES")
+    if cookies:
+        cookies_path = os.path.join(folder, "cookies.txt")
+        with open(cookies_path, "w") as f:
+            f.write(cookies)
+        command += ["--cookies", cookies_path]
+    result = subprocess.run(command + ["--", link], capture_output=True, text=True)
+    videos = [f for f in os.listdir(folder) if f.startswith("video.") and not f.endswith(".part")]
+    if result.returncode != 0 or not videos:
+        lines = (result.stderr or result.stdout or "no output").strip().splitlines()
+        st.error(f"Download failed: {lines[-1]}")
         return None
+    return os.path.join(folder, videos[0])
 
 def transcribe_audio(path):
     try:
-        clip = mp.VideoFileClip(path)
-        clip.audio.write_audiofile("audio.wav")
-        model = WhisperModel("small", compute_type="int8")
-        segments, _ = model.transcribe("audio.wav")
-        text = " ".join([segment.text for segment in segments])
-        return text
+        segments, info = load_whisper().transcribe(path, vad_filter=True)
+        progress = st.progress(0.0, "Transcribing...")
+        texts = []
+        for segment in segments:
+            texts.append(segment.text)
+            progress.progress(min(segment.end / max(info.duration, 1), 1.0), "Transcribing...")
+        progress.empty()
+        return " ".join(texts)
     except Exception as e:
-        st.error(f"Transcription failed: {e}")
+        st.warning(f"No transcript, using on-screen text only: {e}")
         return ""
 
-def extract_text_from_frames(path):
+def extract_text_from_frames(path, max_samples=60):
     cap = cv2.VideoCapture(path)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    step = max(int(fps), total // max_samples, 1)
     texts = []
-    frame_count = 0
-    while True:
+    for frame_number in range(0, total, step):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
-        if not ret or frame_count > 300: 
+        if not ret:
             break
-        if frame_count % 30 == 0:  
-            text = pytesseract.image_to_string(frame)
-            if text.strip():
-                texts.append(text.strip())
-        frame_count += 1
-
+        text = pytesseract.image_to_string(frame).strip()
+        if text and text not in texts:
+            texts.append(text)
     cap.release()
     return " ".join(texts)
 
-def summarize_text(text):
+def summarize_text(text, target_length=1500):
     try:
-        summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-        chunks = [text[i:i+1000] for i in range(0, len(text), 1000)]
-        summary = ""
-        for chunk in chunks:
-            result = summarizer(chunk, max_length=60, min_length=15, do_sample=False)
-            summary += result[0]['summary_text'] + " "
-        return summary.strip()
+        summarizer = load_summarizer()
+        while True:
+            chunks = textwrap.wrap(text, 1000)
+            results = summarizer(chunks, max_length=60, min_length=15, do_sample=False, truncation=True, batch_size=4)
+            text = " ".join(result['summary_text'] for result in results)
+            if len(text) <= target_length or len(chunks) == 1:
+                return text
     except Exception as e:
         st.error(f"Summarization failed: {e}")
         return ""
@@ -103,31 +105,23 @@ def process_video(video_path):
 
 with col1:
     st.title("Paste your link here 🔗")
-    video_link = st.text_input("Paste a YouTube or Instagram video link")
+    video_link = st.text_input("Paste a video link (YouTube, Instagram, TikTok, X, Facebook, Reddit...)")
     if st.button("Process Link", key="process_link_button"):
-        unique_video_filename = f"input_video_{uuid.uuid4().hex}.mp4"
-        clear_previous_files(video_filename=unique_video_filename, audio_filename="audio.wav")
-        video_file = download_video(video_link)
-        if video_file:
-            os.rename(video_file, unique_video_filename)
-            try:
-                process_video(unique_video_filename)
-                with open(unique_video_filename, "rb") as f:
-                    st.video(f.read())  
-            finally:
-                clear_previous_files(video_filename=unique_video_filename)
+        with tempfile.TemporaryDirectory() as folder:
+            video_file = download_video(video_link, folder)
+            if video_file:
+                process_video(video_file)
+                if os.path.getsize(video_file) <= MAX_PREVIEW_BYTES:
+                    st.video(video_file)
 
 with col2:
     st.title("Upload video here 📁")
-    uploaded_file = st.file_uploader("Upload a short video", type=["mp4", "mov", "avi", "mkv"])
+    uploaded_file = st.file_uploader("Upload a video", type=["mp4", "mov", "avi", "mkv"])
     if uploaded_file is not None:
-        unique_uploaded_filename = f"uploaded_video_{uuid.uuid4().hex}.mp4"
-        clear_previous_files(video_filename=unique_uploaded_filename, audio_filename="audio.wav")
-        with open(unique_uploaded_filename, "wb") as f:
-            f.write(uploaded_file.read())
-        st.video(uploaded_file)  
+        st.video(uploaded_file)
         if st.button("Process Uploaded Video", key="process_uploaded_video_button"):
-            try:
-                process_video(unique_uploaded_filename)
-            finally:
-                clear_previous_files(video_filename=unique_uploaded_filename)
+            with tempfile.TemporaryDirectory() as folder:
+                video_path = os.path.join(folder, uploaded_file.name)
+                with open(video_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                process_video(video_path)
