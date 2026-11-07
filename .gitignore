@@ -16,3 +16,6 @@ venv/
 *.sublime-workspace
 *.sublime-project
 lib/
+cookies.txt
+.DS_Store
+.streamlit/secrets.toml

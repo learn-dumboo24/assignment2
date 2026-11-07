@@ -1,8 +1,10 @@
 [server]
 headless = true
 runOnSave = false
+fileWatcherType = "none"
+
+[client]
 showErrorDetails = true
-watchFileSystem = false
 
 [global]
 developmentMode = false
