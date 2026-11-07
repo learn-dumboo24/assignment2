@@ -11,14 +11,6 @@ import textwrap
 MAX_VIDEO_BYTES = 1024 ** 3
 MAX_PREVIEW_BYTES = 50 * 1024 ** 2
 
-@st.cache_resource
-def load_whisper():
-    return WhisperModel("small", compute_type="int8")
-
-@st.cache_resource
-def load_summarizer():
-    return pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-
 st.markdown("<br><br><br>", unsafe_allow_html=True)
 col1, spacer, col2 = st.columns([2, 2, 3])
 
@@ -43,12 +35,16 @@ def download_video(link, folder):
     if result.returncode != 0 or not videos:
         lines = (result.stderr or result.stdout or "no output").strip().splitlines()
         st.error(f"Download failed: {lines[-1]}")
+        with st.expander("yt-dlp details"):
+            st.code("\n".join(lines[-15:]))
         return None
     return os.path.join(folder, videos[0])
 
 def transcribe_audio(path):
     try:
-        segments, info = load_whisper().transcribe(path, vad_filter=True)
+        # ponytail: models load per run so only one sits in memory, cache them if Cloud RAM stops being the limit
+        model = WhisperModel("base", compute_type="int8")
+        segments, info = model.transcribe(path, vad_filter=True)
         progress = st.progress(0.0, "Transcribing...")
         texts = []
         for segment in segments:
@@ -79,7 +75,7 @@ def extract_text_from_frames(path, max_samples=60):
 
 def summarize_text(text, target_length=1500):
     try:
-        summarizer = load_summarizer()
+        summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
         while True:
             chunks = textwrap.wrap(text, 1000)
             results = summarizer(chunks, max_length=60, min_length=15, do_sample=False, truncation=True, batch_size=4)
