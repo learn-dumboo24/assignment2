@@ -7,3 +7,5 @@ opencv-python-headless==4.11.0.86
 pytesseract==0.3.13
 # unpinned on purpose, sites break old yt-dlp releases
 yt-dlp[default,curl-cffi]
+# JS runtime yt-dlp needs for YouTube
+deno
