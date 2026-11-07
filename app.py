@@ -19,7 +19,6 @@ def download_video(link, folder):
         "yt-dlp",
         "--no-playlist",
         "--max-filesize", str(MAX_VIDEO_BYTES),
-        "--js-runtimes", "node",
         "-f", "bv*[height<=480]+ba/b[height<=480]/b",
         "-o", os.path.join(folder, "video.%(ext)s"),
     ]

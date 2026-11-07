@@ -8,7 +8,7 @@ step 4: pip install -r requirements.txt(bash)
 
 step 5: streamlit run app.py
 
-note- ffmpeg, tesseract and node must be installed locally (packages.txt covers Streamlit Cloud)
+note- ffmpeg and tesseract must be installed locally (packages.txt covers Streamlit Cloud)
 
 Demo Link: https://drive.google.com/file/d/1O9yD7aDEMRdZalXr5yjoyfnMwz3rgelU/view?usp=sharing
 
